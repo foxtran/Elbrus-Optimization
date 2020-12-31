@@ -36,9 +36,9 @@ lfortran:
 	gfortran  -O4                                       rdf2bin.f90   -o $(RDF2BIN)
 
 run-H:
-	time ./$(EXE) data/1-*.1.RDF  data/1-*.4-*.RDF  > /dev/null
+	time ./$(EXE) data/1-*.1.RDF.bin  data/1-*.4-*.RDF.bin  > /dev/null
 
 run-Na:
-	time ./$(EXE) data/11-*.1.RDF data/11-*.4-*.RDF > /dev/null
+	time ./$(EXE) data/11-*.1.RDF.bin data/11-*.4-*.RDF.bin > /dev/null
 
 .PHONY: data bindata

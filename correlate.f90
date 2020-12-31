@@ -10,10 +10,12 @@ program main
   integer :: stat
   logical :: existance
   character(len=:), allocatable :: program_name, density_file, orbital_file
+  ! reader
+  integer  :: radial_points, tmp_rp
+  real(fp) :: start, shift, tmp_st, tmp_sh
   ! internal variables
   integer :: i, j, n
   ! work tables
-  integer :: radial_points
   real(fp), dimension(moments) :: powN
   real(fp), dimension(:), allocatable :: radius, density, radius2
   real(fp), dimension(:), allocatable :: correlation, orbital
@@ -35,18 +37,21 @@ program main
     print *, "Stopping..."
     stop
   end if
-  open(LU_density, file=density_file)
-  ! count of lines == count of points
-  radial_points = points(LU_density)
+  open(LU_density, file=density_file, form='unformatted', access='sequential')
+  read(LU_density) radial_points
   allocate(radius(radial_points), density(radial_points), radius2(radial_points))
   allocate(correlation(moments), orbital(radial_points))
   allocate(density_table(radial_points, moments))
+  allocate(character(len=1024) :: orbital_file)
   ! read density
-  do i = 1, radial_points
-    read(LU_density,*) radius(i), density(i)
-  end do
+  read(LU_density) start
+  read(LU_density) shift
+  read(LU_density) density
   close(LU_density)
   ! prepare constant arrays
+  do i = 1, radial_points
+    radius(i) = start + shift*(i-1)
+  end do
   radius2 = radius * radius
   do n = 1, moments
     powN(n) = deltaMoment*(n-1)
@@ -57,7 +62,6 @@ program main
     density_table(:,n) = density_table(:,n)/sum(density_table(:,n))
   end do
   ! orbitals
-  allocate(character(len=1024) :: orbital_file)
   do j = 2, arguments_count
     call get_command_argument(j, orbital_file, status=stat)
     inquire(file=orbital_file, exist=existance)
@@ -67,11 +71,12 @@ program main
       print *, "Stopping..."
       stop
     end if
-    open(LU_orbital, file=orbital_file)
     ! read orbitals
-    do i = 1, radial_points
-      read(LU_orbital,*) radius(i), orbital(i)
-    end do
+    open(LU_orbital, file=orbital_file, form='unformatted', access='sequential')
+    read(LU_orbital) tmp_rp
+    read(LU_orbital) tmp_st
+    read(LU_orbital) tmp_sh
+    read(LU_orbital) orbital
     close(LU_orbital)
     ! r^2 weighing and normalizing orbital
     orbital = radius2 * orbital * orbital
@@ -83,17 +88,4 @@ program main
       write(6, "(A,A1,F4.1,A1,E18.12)") trim(orbital_file), ";", powN(n), ";", correlation(n)
     end do
   end do
-contains
-  integer function points(LU) result(lines)
-    integer, intent(in) :: LU
-    integer :: io
-    lines = 0
-    rewind(LU)
-    do
-      read(LU, *, iostat=io)
-      if (io .ne. 0) exit
-      lines = lines + 1
-    end do
-    rewind(LU)
-  end function points
 end program main
