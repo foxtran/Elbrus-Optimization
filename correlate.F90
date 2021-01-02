@@ -1,4 +1,7 @@
 program main
+#ifdef _OPENMP
+  use omp_lib
+#endif
   implicit none
   integer,  parameter :: fp = 8
   integer,  parameter :: maxMoment = 25, npointmoment = 10
@@ -11,6 +14,7 @@ program main
   logical :: existance
   character(len=:), allocatable :: program_name, density_file, orbital_file
   ! reader
+  integer  :: thread_num
   integer  :: radial_points, tmp_rp
   real(fp) :: start, shift, tmp_st, tmp_sh
   ! internal variables
@@ -30,7 +34,6 @@ program main
   end if
   orbitals_count = arguments_count - 1
   allocate(character(len=1024) :: density_file)
-  allocate(character(len=1024) :: orbital_file)
   call get_command_argument(1, density_file, status=stat)
   inquire(file=density_file, exist=existance)
   if(.not.existance) then
@@ -49,6 +52,16 @@ program main
   read(LU_density) shift
   read(LU_density) density
   close(LU_density)
+  !$omp parallel default(none) &
+  !$omp private(orbital_file, existance, stat, thread_num)  &
+  !$omp shared(orbitals_count, tmp_rp, tmp_st, tmp_sh, orbitals)
+  allocate(character(len=1024) :: orbital_file)
+#ifdef _OPENMP
+  thread_num = OMP_GET_THREAD_NUM()
+#else
+  thread_num = 0
+#endif
+  !$omp do
   do j = 1, orbitals_count
     call get_command_argument(j+1, orbital_file, status=stat)
     inquire(file=orbital_file, exist=existance)
@@ -59,13 +72,14 @@ program main
       stop
     end if
     ! read orbitals
-    open(LU_orbital, file=orbital_file, form='unformatted', access='sequential')
-    read(LU_orbital) tmp_rp
-    read(LU_orbital) tmp_st
-    read(LU_orbital) tmp_sh
-    read(LU_orbital) orbitals(:,j)
-    close(LU_orbital)
+    open(LU_orbital+thread_num, file=orbital_file, form='unformatted', access='sequential')
+    read(LU_orbital+thread_num) tmp_rp
+    read(LU_orbital+thread_num) tmp_st
+    read(LU_orbital+thread_num) tmp_sh
+    read(LU_orbital+thread_num) orbitals(:,j)
+    close(LU_orbital+thread_num)
   end do
+  !$omp end parallel
   ! prepare constant arrays
   do i = 1, radial_points
     radius(i) = start + shift*(i-1)
@@ -88,6 +102,7 @@ program main
       correlation(n,j) = sum(abs(orbitals(:,j)-density_table(:,n)))
     end do
   end do
+  if(.not.allocated(orbital_file)) allocate(character(len=1024) :: orbital_file)
   do j = 1, orbitals_count
     call get_command_argument(j+1, orbital_file, status=stat)
     do n = 1, moments
